@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Transfer unlimited.surf API \u2014 Setup &amp; Playground</title>
+  <link rel="stylesheet" href="./style.css" />
+</head>
+<body>
+  <header>
+    <h1>Transfer unlimited.surf API</h1>
+    <p class="subtitle">
+      OpenAI / Anthropic compatible adapter for <code>https://unlimited.surf</code>.
+      Run it locally with one Node command, or deploy anywhere that runs Node.js \u2014
+      no Cloudflare / wrangler required.
+    </p>
+  </header>
+
+  <main>
+    <section class="card">
+      <h2>1. Pick a deployment target</h2>
+      <p>This page is hosted on GitHub Pages and is <strong>static only</strong>: it
+      cannot proxy API calls itself. Run the proxy in one of these places, then point
+      this page (or your real client) at it.</p>
+
+      <h3>Run locally (recommended for personal use)</h3>
+      <pre><code>git clone https://github.com/&lt;you&gt;/transfer-api.git
+cd transfer-api
+# No npm install needed \u2014 the server has zero runtime dependencies.
+UNLIMITED_SURF_API_KEY=&lt;your unlimited.surf key&gt; \
+WORKER_API_KEY=&lt;optional client-facing key&gt; \
+node server.js</code></pre>
+      <p>Default URL: <code>http://localhost:8787</code></p>
+
+      <h3>Run with Docker</h3>
+      <pre><code>docker build -t transfer-api .
+docker run -p 8787:8787 \
+  -e UNLIMITED_SURF_API_KEY=&lt;your unlimited.surf key&gt; \
+  -e WORKER_API_KEY=&lt;optional client-facing key&gt; \
+  transfer-api</code></pre>
+
+      <h3>Other hosts</h3>
+      <ul>
+        <li><strong>Render / Railway / Fly.io / Koyeb</strong>: deploy from this repo, set <code>node server.js</code> as the start command, expose port <code>8787</code> (or read <code>$PORT</code>).</li>
+        <li><strong>Vercel / Netlify Functions</strong>: wrap <code>handleRequest</code> from <code>src/worker.js</code> in their fetch-style adapter.</li>
+        <li><strong>Cloudflare Workers</strong>: still supported via <code>npx wrangler deploy</code>, but no longer required.</li>
+      </ul>
+    </section>
+
+    <section class="card">
+      <h2>2. Generate client config</h2>
+      <p>Fill in your deployed base URL and the key your clients will send. The
+      snippets below update live.</p>
+
+      <div class="form-grid">
+        <label>
+          <span>Base URL</span>
+          <input id="baseUrl" type="text" value="http://localhost:8787" />
+        </label>
+        <label>
+          <span>Client API key</span>
+          <input id="apiKey" type="text" value="sk-your-worker-key" />
+        </label>
+        <label>
+          <span>OpenAI model</span>
+          <input id="openaiModel" type="text" value="gateway-gpt-5-5" />
+        </label>
+        <label>
+          <span>Anthropic model</span>
+          <input id="claudeModel" type="text" value="claude-opus-4-7-20260101" />
+        </label>
+      </div>
+
+      <h3>OpenAI client (Python)</h3>
+      <pre><code id="snippetOpenAIPy"></code></pre>
+
+      <h3>curl \u2014 OpenAI chat.completions</h3>
+      <pre><code id="snippetCurlOpenAI"></code></pre>
+
+      <h3>curl \u2014 Anthropic messages</h3>
+      <pre><code id="snippetCurlAnthropic"></code></pre>
+
+      <h3>Claude Code / agents (PowerShell)</h3>
+      <pre><code id="snippetClaudeCode"></code></pre>
+    </section>
+
+    <section class="card">
+      <h2>3. Browser playground</h2>
+      <p>Send a quick chat-completions request to your running proxy. The browser
+      calls your <code>Base URL</code> directly, so the proxy must allow CORS \u2014
+      <code>server.js</code> already does. The response streams here as it arrives.</p>
+
+      <label class="block">
+        <span>Prompt</span>
+        <textarea id="promptInput" rows="4">Say hello in one short sentence.</textarea>
+      </label>
+      <div class="row">
+        <button id="sendBtn">Send</button>
+        <label class="inline">
+          <input type="checkbox" id="streamToggle" checked />
+          stream
+        </label>
+        <label class="inline">
+          <input type="checkbox" id="anthropicToggle" />
+          use Anthropic /v1/messages
+        </label>
+      </div>
+      <pre><code id="playgroundOutput" class="output">(no response yet)</code></pre>
+    </section>
+
+    <footer>
+      <p>
+        Source: <a id="repoLink" href="https://github.com/">project repository</a>.
+        MCP servers still run client-side; this proxy only exposes the model endpoints.
+      </p>
+    </footer>
+  </main>
+
+  <script src="./app.js"></script>
+</body>
+</html>

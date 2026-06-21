@@ -1,6 +1,14 @@
-const DEFAULT_UPSTREAM_BASE_URL = "https://unlimited.surf";
-const DEFAULT_OPENAI_MODEL = "gateway-gpt-5-5";
-const DEFAULT_CLAUDE_MODEL = "claude-opus-4-7-20260101";
+// Core request handler.
+// This module is runtime-agnostic and only depends on the Web Fetch API
+// (Request, Response, fetch, URL, crypto.getRandomValues, TextEncoder, btoa).
+// It runs on:
+//   - Cloudflare Workers (entry: this file's default export)
+//   - Node.js 18+ (entry: server.js, which adapts node:http <-> fetch primitives)
+//   - Bun / Deno (use handleRequest directly)
+
+export const DEFAULT_UPSTREAM_BASE_URL = "https://unlimited.surf";
+export const DEFAULT_OPENAI_MODEL = "gateway-gpt-5-5";
+export const DEFAULT_CLAUDE_MODEL = "claude-opus-4-7-20260101";
 
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
@@ -9,51 +17,59 @@ const CORS_HEADERS = {
   "Access-Control-Expose-Headers": "content-type,request-id,x-request-id",
 };
 
+// Main entry. Pass a standard Request and an env-like object
+// (plain object, or process.env on Node). Returns a standard Response.
+export async function handleRequest(request, env = {}) {
+  if (request.method === "OPTIONS") {
+    return new Response(null, { status: 204, headers: CORS_HEADERS });
+  }
+
+  const url = new URL(request.url);
+  const path = normalizePath(url.pathname);
+
+  try {
+    const authError = validateWorkerApiKey(request, env);
+    if (authError) return authError;
+
+    if (path === "/" || path === "/health") {
+      return jsonResponse(serviceInfo(request, env));
+    }
+
+    if (path.startsWith("/api/")) {
+      return proxyUpstream(request, env, path);
+    }
+
+    if (path === "/mcp" || path === "/v1/mcp" || path === "/anthropic/mcp" || path === "/anthropic/v1/mcp") {
+      return jsonResponse(mcpInfo(request));
+    }
+
+    if (path === "/codex" || path === "/v1/codex" || path === "/anthropic/codex" || path === "/anthropic/v1/codex") {
+      return textResponse(codexSetup(request), "text/plain; charset=utf-8");
+    }
+
+    if (path === "/v1/setup" || path === "/anthropic/setup" || path === "/anthropic/v1/setup") {
+      return textResponse(agentSetup(request), "text/plain; charset=utf-8");
+    }
+
+    if (path === "/v1/messages" || (path === "/v1/models" && looksLikeAnthropicRequest(request)) || path.startsWith("/anthropic/")) {
+      return handleAnthropic(request, env, path);
+    }
+
+    if (path.startsWith("/v1/")) {
+      return handleOpenAI(request, env, path);
+    }
+
+    return errorResponse(404, "not_found", `No route for ${path}`);
+  } catch (error) {
+    return errorResponse(500, "internal_error", error && error.message ? error.message : String(error));
+  }
+}
+
+// Cloudflare Workers entry — keeps full backward compatibility with the
+// previous default-export shape so wrangler-based deploys still work.
 export default {
-  async fetch(request, env) {
-    if (request.method === "OPTIONS") {
-      return new Response(null, { status: 204, headers: CORS_HEADERS });
-    }
-
-    const url = new URL(request.url);
-    const path = normalizePath(url.pathname);
-
-    try {
-      const authError = validateWorkerApiKey(request, env);
-      if (authError) return authError;
-
-      if (path === "/" || path === "/health") {
-        return jsonResponse(serviceInfo(request, env));
-      }
-
-      if (path.startsWith("/api/")) {
-        return proxyUpstream(request, env, path);
-      }
-
-      if (path === "/mcp" || path === "/v1/mcp" || path === "/anthropic/mcp" || path === "/anthropic/v1/mcp") {
-        return jsonResponse(mcpInfo(request));
-      }
-
-      if (path === "/codex" || path === "/v1/codex" || path === "/anthropic/codex" || path === "/anthropic/v1/codex") {
-        return textResponse(codexSetup(request), "text/plain; charset=utf-8");
-      }
-
-      if (path === "/v1/setup" || path === "/anthropic/setup" || path === "/anthropic/v1/setup") {
-        return textResponse(agentSetup(request), "text/plain; charset=utf-8");
-      }
-
-      if (path === "/v1/messages" || (path === "/v1/models" && looksLikeAnthropicRequest(request)) || path.startsWith("/anthropic/")) {
-        return handleAnthropic(request, env, path);
-      }
-
-      if (path.startsWith("/v1/")) {
-        return handleOpenAI(request, env, path);
-      }
-
-      return errorResponse(404, "not_found", `No route for ${path}`);
-    } catch (error) {
-      return errorResponse(500, "internal_error", error && error.message ? error.message : String(error));
-    }
+  fetch(request, env) {
+    return handleRequest(request, env);
   },
 };
 
