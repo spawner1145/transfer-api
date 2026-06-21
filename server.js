@@ -5,13 +5,16 @@
 //   node server.js
 //   PORT=6008 node server.js
 //
-// If UNLIMITED_SURF_API_KEY is not set, the server fetches one from
-// https://unlimited.surf/api/key on startup and refreshes it periodically.
+// Key sources (checked in priority order):
+//   1. keys.txt file next to server.js — one key per line, round-robin per request
+//   2. UNLIMITED_SURF_API_KEY / API_KEY / AUTH_KEY env vars
+//   3. Remote fetch from https://unlimited.surf/api/key + periodic refresh
 //
 // Requirements: Node.js >= 18 (built-in fetch, Request, Response, ReadableStream).
 
 import http from "node:http";
 import { readFile } from "node:fs/promises";
+import { existsSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { Readable } from "node:stream";
@@ -26,6 +29,12 @@ const KEY_REFRESH_INTERVAL_MS = Math.max(
 );
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const DOCS_DIR = path.join(__dirname, "docs");
+const KEYS_FILE_PATH = path.join(__dirname, "keys.txt");
+
+// ── keys.txt round-robin pool ──────────────────────────────
+let keyPool = [];          // non-empty when keys.txt is loaded
+let keyPoolIndex = 0;      // current round-robin position
+
 const STATIC_TYPES = new Map([
   [".html", "text/html; charset=utf-8"],
   [".css", "text/css; charset=utf-8"],
@@ -88,17 +97,75 @@ async function refreshUpstreamKey(reason = "scheduled") {
   return data;
 }
 
+async function loadKeysTxt() {
+  // Try loading keys from keys.txt file next to server.js.
+  if (!existsSync(KEYS_FILE_PATH)) {
+    console.log("[keys.txt] file not found, skipping.");
+    return;
+  }
+
+  try {
+    const raw = await readFile(KEYS_FILE_PATH, "utf8");
+    const keys = raw
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter((line) => line.length > 0 && !line.startsWith("#"));
+
+    if (keys.length === 0) {
+      console.log("[keys.txt] file is empty (no non-comment lines), skipping.");
+      return;
+    }
+
+    keyPool = keys;
+    keyPoolIndex = 0;
+    // Set the first key so worker.js can use it immediately.
+    process.env.UNLIMITED_SURF_API_KEY = keyPool[0];
+    process.env.KEY_SOURCE = "keys.txt";
+    console.log(
+      `[keys.txt] loaded ${keyPool.length} key(s) from keys.txt: ${keyPool.map(maskKey).join(', ')}`,
+    );
+    console.log(`[keys.txt] starting with key #1/${keyPool.length}: ${maskKey(process.env.UNLIMITED_SURF_API_KEY)}`);
+  } catch (err) {
+    console.error(`[keys.txt] failed to read keys.txt: ${err && err.message ? err.message : String(err)}`);
+  }
+}
+
+// Called by worker.js when it actually needs an upstream key for an API call.
+// Only rotates on real upstream usage — not on static/health/UI requests.
+export function rotatePoolKey() {
+  if (keyPool.length === 0) return null;
+  keyPoolIndex = (keyPoolIndex + 1) % keyPool.length;
+  const key = keyPool[keyPoolIndex];
+  process.env.UNLIMITED_SURF_API_KEY = key;
+  return key;
+}
+
 async function ensureInitialUpstreamKey() {
+  // Priority 1: keys.txt file (round-robin, no remote fetch needed).
+  await loadKeysTxt();
+  if (keyPool.length > 0) {
+    console.log("[key refresh] keys.txt loaded — remote key fetch and periodic refresh are disabled.");
+    return;
+  }
+
+  // Priority 2: pre-configured env keys.
   if (process.env.UNLIMITED_SURF_API_KEY || process.env.API_KEY || process.env.AUTH_KEY) {
     console.log("[key refresh] startup: using configured upstream key; periodic refresh remains enabled.");
     return;
   }
 
+  // Priority 3: fetch from remote endpoint.
   console.log(`[key refresh] startup: UNLIMITED_SURF_API_KEY not set, fetching from ${keySourceUrl()} ...`);
   await refreshUpstreamKey("startup");
 }
 
 function startKeyRefreshTimer() {
+  // When keys.txt pool is active, no periodic remote refresh is needed.
+  if (keyPool.length > 0) {
+    console.log("[key refresh] periodic refresh disabled — keys.txt round-robin pool is active.");
+    return;
+  }
+
   if (String(process.env.AUTO_REFRESH_UPSTREAM_KEY || "true").toLowerCase() === "false") {
     console.log("[key refresh] periodic refresh disabled by AUTO_REFRESH_UPSTREAM_KEY=false.");
     return;
@@ -276,7 +343,10 @@ const server = http.createServer(async (req, res) => {
     if (await tryServeDocs(req, res)) return;
 
     const fetchRequest = nodeRequestToFetchRequest(req);
-    const fetchResponse = await handleRequest(fetchRequest, process.env);
+    // Inject the pool rotation function so worker.js only rotates on actual
+    // upstream API calls, not on every HTTP request.
+    const env = { ...process.env, _rotatePoolKey: rotatePoolKey };
+    const fetchResponse = await handleRequest(fetchRequest, env);
     await writeFetchResponseToNode(fetchResponse, res);
   } catch (err) {
     console.error("[handler error]", err);

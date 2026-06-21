@@ -9,6 +9,7 @@ WORKDIR /app
 COPY package.json ./
 COPY src ./src
 COPY server.js ./
+COPY keys.txt ./
 
 ENV PORT=6008
 ENV HOST=0.0.0.0

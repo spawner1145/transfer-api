@@ -844,7 +844,16 @@ function upstreamApiKey(request, env) {
   throw new Error("Missing upstream API key. Set UNLIMITED_SURF_API_KEY or pass Authorization: Bearer <key> / x-api-key: <key>.");
 }
 
+// When running under Node.js with keys.txt round-robin, the pool rotation
+// function is injected via env._rotatePoolKey so that keys only rotate on
+// actual upstream API calls — not on every HTTP request (health, UI, etc).
 function optionalUpstreamApiKey(request, env) {
+  // keys.txt round-robin: rotate and use the next pool key.
+  if (env.KEY_SOURCE === "keys.txt" && typeof env._rotatePoolKey === "function") {
+    const key = env._rotatePoolKey();
+    if (key) return key;
+  }
+
   const configured = env.UNLIMITED_SURF_API_KEY || env.API_KEY || env.AUTH_KEY;
   if (configured) return configured;
 
