@@ -3,8 +3,8 @@ const $ = (id) => document.getElementById(id);
 const STORAGE_KEY = "transfer-api-chat-ui-v3";
 const DEFAULT_CLIENT_KEY = "sk-no-key";
 const DEFAULT_MODELS = {
-  openai: ["gateway-gpt-5-5", "gateway-gpt-5", "gpt-4o", "gpt-4o-mini"],
-  anthropic: ["claude-opus-4-7-20260101", "claude-sonnet-4-5-20250929", "claude-3-5-sonnet-latest"],
+  openai: ["gateway-gpt-5-5", "请先刷新"],
+  anthropic: ["gateway-gpt-5-5", "请先刷新"],
 };
 
 const els = {
