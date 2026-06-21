@@ -30,18 +30,18 @@ cd transfer-api
 UNLIMITED_SURF_API_KEY=&lt;your unlimited.surf key&gt; \
 WORKER_API_KEY=&lt;optional client-facing key&gt; \
 node server.js</code></pre>
-      <p>Default URL: <code>http://localhost:8787</code></p>
+      <p>Default URL: <code>http://localhost:6008</code></p>
 
       <h3>Run with Docker</h3>
       <pre><code>docker build -t transfer-api .
-docker run -p 8787:8787 \
+docker run -p 6008:6008 \
   -e UNLIMITED_SURF_API_KEY=&lt;your unlimited.surf key&gt; \
   -e WORKER_API_KEY=&lt;optional client-facing key&gt; \
   transfer-api</code></pre>
 
       <h3>Other hosts</h3>
       <ul>
-        <li><strong>Render / Railway / Fly.io / Koyeb</strong>: deploy from this repo, set <code>node server.js</code> as the start command, expose port <code>8787</code> (or read <code>$PORT</code>).</li>
+        <li><strong>Render / Railway / Fly.io / Koyeb</strong>: deploy from this repo, set <code>node server.js</code> as the start command, expose port <code>6008</code> (or read <code>$PORT</code>).</li>
         <li><strong>Vercel / Netlify Functions</strong>: wrap <code>handleRequest</code> from <code>src/worker.js</code> in their fetch-style adapter.</li>
         <li><strong>Cloudflare Workers</strong>: still supported via <code>npx wrangler deploy</code>, but no longer required.</li>
       </ul>
@@ -55,7 +55,7 @@ docker run -p 8787:8787 \
       <div class="form-grid">
         <label>
           <span>Base URL</span>
-          <input id="baseUrl" type="text" value="http://localhost:8787" />
+          <input id="baseUrl" type="text" value="http://localhost:6008" />
         </label>
         <label>
           <span>Client API key</span>

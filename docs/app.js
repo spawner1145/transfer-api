@@ -55,7 +55,7 @@ function stripTrailingSlash(value) {
 }
 
 function renderSnippets() {
-  const base = stripTrailingSlash(baseUrlInput.value) || "http://localhost:8787";
+  const base = stripTrailingSlash(baseUrlInput.value) || "http://localhost:6008";
   const key = apiKeyInput.value || "<your key>";
   const openaiModel = openaiModelInput.value || "gateway-gpt-5-5";
   const claudeModel = claudeModelInput.value || "claude-opus-4-7-20260101";

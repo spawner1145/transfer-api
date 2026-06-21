@@ -45,11 +45,11 @@ $env:WORKER_API_KEY         = "<可选，自定义的客户端 key>"
 node server.js
 ```
 
-默认监听 `http://localhost:8787`。可用环境变量：
+默认监听 `http://localhost:6008`。可用环境变量：
 
 | 变量 | 说明 | 默认 |
 |---|---|---|
-| `PORT` | 监听端口 | `8787` |
+| `PORT` | 监听端口 | `6008` |
 | `HOST` | 监听地址 | `0.0.0.0` |
 | `UNLIMITED_SURF_API_KEY` | 上游真实 key | 无 |
 | `WORKER_API_KEY` | 启用客户端鉴权后，调用方必须发送的 key | 无（关闭鉴权） |
@@ -60,8 +60,8 @@ node server.js
 验证：
 
 ```bash
-curl http://localhost:8787/health
-curl http://localhost:8787/v1/models -H "Authorization: Bearer <你的 key>"
+curl http://localhost:6008/health
+curl http://localhost:6008/v1/models -H "Authorization: Bearer <你的 key>"
 ```
 
 ---
@@ -70,7 +70,7 @@ curl http://localhost:8787/v1/models -H "Authorization: Bearer <你的 key>"
 
 ```bash
 docker build -t transfer-api .
-docker run -d --name transfer-api -p 8787:8787 \
+docker run -d --name transfer-api -p 6008:6008 \
   -e UNLIMITED_SURF_API_KEY=<你的 unlimited.surf key> \
   -e WORKER_API_KEY=<可选> \
   transfer-api
@@ -107,7 +107,7 @@ GitHub Pages 是**纯静态托管**，无法运行后端代理。因此本仓库
 3. 推一次代码，仓库里附带的 `.github/workflows/pages.yml` 会把 `docs/` 自动部署到 Pages。
 4. 访问 `https://<你的用户名>.github.io/<仓库名>/`。
 
-> 提示：GitHub Pages 是 HTTPS，浏览器会拒绝从 HTTPS 页面调 HTTP 后端（mixed content）。所以如果想用 Playground 页面测试，你的后端要么放在本地用 `http://localhost:8787`（同源 / localhost 例外），要么放在有 HTTPS 的平台上（Render / Fly.io / Cloudflare 等都自带 HTTPS）。
+> 提示：GitHub Pages 是 HTTPS，浏览器会拒绝从 HTTPS 页面调 HTTP 后端（mixed content）。所以如果想用 Playground 页面测试，你的后端要么放在本地用 `http://localhost:6008`（同源 / localhost 例外），要么放在有 HTTPS 的平台上（Render / Fly.io / Cloudflare 等都自带 HTTPS）。
 
 ---
 
@@ -144,7 +144,7 @@ wrangler deploy
 ## OpenAI 兼容接口示例
 
 ```bash
-curl http://localhost:8787/v1/chat/completions \
+curl http://localhost:6008/v1/chat/completions \
   -H "Authorization: Bearer <你的 key>" \
   -H "Content-Type: application/json" \
   -d '{"model":"gateway-gpt-5","messages":[{"role":"user","content":"Hello"}],"stream":true}'
@@ -155,7 +155,7 @@ curl http://localhost:8787/v1/chat/completions \
 ## Anthropic / Claude Code 兼容
 
 ```powershell
-$env:ANTHROPIC_BASE_URL  = "http://localhost:8787"
+$env:ANTHROPIC_BASE_URL  = "http://localhost:6008"
 $env:ANTHROPIC_AUTH_TOKEN = "<你的 key>"
 $env:ANTHROPIC_API_KEY    = "<你的 key>"
 $env:ANTHROPIC_MODEL      = "claude-opus-4-7-20260101"
@@ -191,7 +191,7 @@ A proxy that exposes `https://unlimited.surf` as OpenAI-compatible and Anthropic
 git clone https://github.com/<you>/transfer-api.git
 cd transfer-api
 UNLIMITED_SURF_API_KEY=<your key> node server.js
-# Listens on http://localhost:8787
+# Listens on http://localhost:6008
 ```
 
 Environment variables: `PORT`, `HOST`, `UNLIMITED_SURF_API_KEY`, `WORKER_API_KEY`, `UPSTREAM_BASE_URL`, `DEFAULT_MODEL`, `DEFAULT_CLAUDE_MODEL`.
@@ -200,7 +200,7 @@ Environment variables: `PORT`, `HOST`, `UNLIMITED_SURF_API_KEY`, `WORKER_API_KEY
 
 ```bash
 docker build -t transfer-api .
-docker run -p 8787:8787 -e UNLIMITED_SURF_API_KEY=<your key> transfer-api
+docker run -p 6008:6008 -e UNLIMITED_SURF_API_KEY=<your key> transfer-api
 ```
 
 ### PaaS
@@ -209,7 +209,7 @@ Build command: empty. Start command: `node server.js`. Set env vars in the platf
 
 ### GitHub Pages (static helper only)
 
-The site under `docs/` is a config helper + browser playground that talks to whatever proxy URL you give it. Enable Pages in repo Settings → Pages → Source: GitHub Actions; the bundled workflow deploys it automatically. Note: an HTTPS Pages site cannot talk to an HTTP backend (mixed content), so host the proxy on HTTPS or test against `http://localhost:8787` from a locally-served copy.
+The site under `docs/` is a config helper + browser playground that talks to whatever proxy URL you give it. Enable Pages in repo Settings → Pages → Source: GitHub Actions; the bundled workflow deploys it automatically. Note: an HTTPS Pages site cannot talk to an HTTP backend (mixed content), so host the proxy on HTTPS or test against `http://localhost:6008` from a locally-served copy.
 
 ### Cloudflare Workers (optional)
 

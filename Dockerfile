@@ -10,8 +10,8 @@ COPY package.json ./
 COPY src ./src
 COPY server.js ./
 
-ENV PORT=8787
+ENV PORT=6008
 ENV HOST=0.0.0.0
-EXPOSE 8787
+EXPOSE 6008
 
 CMD ["node", "server.js"]

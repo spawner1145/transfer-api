@@ -3,7 +3,7 @@
 //
 // Usage:
 //   node server.js
-//   PORT=8787 UNLIMITED_SURF_API_KEY=sk-... node server.js
+//   PORT=6008 UNLIMITED_SURF_API_KEY=sk-... node server.js
 //
 // Requirements: Node.js >= 18 (built-in fetch, Request, Response, ReadableStream).
 
@@ -11,7 +11,7 @@ import http from "node:http";
 import { Readable } from "node:stream";
 import { handleRequest } from "./src/worker.js";
 
-const PORT = Number(process.env.PORT) || 8787;
+const PORT = Number(process.env.PORT) || 6008;
 const HOST = process.env.HOST || "0.0.0.0";
 
 // Verify the runtime exposes the Web fetch primitives we rely on.
