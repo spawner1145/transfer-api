@@ -51,9 +51,12 @@ node server.js
 |---|---|---|
 | `PORT` | 监听端口 | `6008` |
 | `HOST` | 监听地址 | `0.0.0.0` |
-| `UNLIMITED_SURF_API_KEY` | 上游真实 key | 无 |
+| `UNLIMITED_SURF_API_KEY` | 上游真实 key；不填时启动时自动从 `https://unlimited.surf/api/key` 获取 | 自动获取 |
 | `WORKER_API_KEY` | 启用客户端鉴权后，调用方必须发送的 key | 无（关闭鉴权） |
 | `UPSTREAM_BASE_URL` | 上游地址 | `https://unlimited.surf` |
+| `KEY_SOURCE_URL` | 自动获取 key 的地址 | `https://unlimited.surf/api/key` |
+| `KEY_REFRESH_INTERVAL_MS` | 后台刷新 key 的间隔，最小 60000ms | `3600000` |
+| `AUTO_REFRESH_UPSTREAM_KEY` | 是否启用后台定时刷新；设为 `false` 可关闭 | `true` |
 | `DEFAULT_MODEL` | OpenAI 路径默认模型 | `gateway-gpt-5-5` |
 | `DEFAULT_CLAUDE_MODEL` | Anthropic 路径默认模型 | `claude-opus-4-7-20260101` |
 
@@ -61,8 +64,10 @@ node server.js
 
 ```bash
 curl http://localhost:6008/health
-curl http://localhost:6008/v1/models -H "Authorization: Bearer <你的 key>"
+curl http://localhost:6008/v1/models -H "Authorization: Bearer <你的客户端 key；未设置 WORKER_API_KEY 时可填任意值>"
 ```
+
+> 如果没有设置 `UNLIMITED_SURF_API_KEY`，服务会在启动时自动请求 `https://unlimited.surf/api/key`，读取返回 JSON 中的 `key` 字段作为上游 key；之后每隔 1 小时自动刷新一次并更新后台使用的 key。
 
 ---
 
@@ -145,7 +150,7 @@ wrangler deploy
 
 ```bash
 curl http://localhost:6008/v1/chat/completions \
-  -H "Authorization: Bearer <你的 key>" \
+  -H "Authorization: Bearer <你的客户端 key；未设置 WORKER_API_KEY 时可填任意值>" \
   -H "Content-Type: application/json" \
   -d '{"model":"gateway-gpt-5","messages":[{"role":"user","content":"Hello"}],"stream":true}'
 ```

@@ -3,117 +3,124 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Transfer unlimited.surf API \u2014 Setup &amp; Playground</title>
+  <title>Transfer API 文档与聊天</title>
   <link rel="stylesheet" href="./style.css" />
 </head>
 <body>
-  <header>
-    <h1>Transfer unlimited.surf API</h1>
-    <p class="subtitle">
-      OpenAI / Anthropic compatible adapter for <code>https://unlimited.surf</code>.
-      Run it locally with one Node command, or deploy anywhere that runs Node.js \u2014
-      no Cloudflare / wrangler required.
-    </p>
+  <header class="hero">
+    <div class="hero-inner">
+      <p class="eyebrow">localhost:6008</p>
+      <h1>Transfer unlimited.surf API</h1>
+      <p class="subtitle">OpenAI / Anthropic 兼容中转代理。这里可以查看使用文档，也可以直接选择模型进行多轮流式对话。</p>
+      <div class="hero-actions">
+        <a class="button button-primary" href="#chat">开始聊天</a>
+        <a class="button" href="#docs">查看文档</a>
+        <a class="button" href="/health" target="_blank" rel="noreferrer">健康检查</a>
+      </div>
+    </div>
   </header>
 
   <main>
-    <section class="card">
-      <h2>1. Pick a deployment target</h2>
-      <p>This page is hosted on GitHub Pages and is <strong>static only</strong>: it
-      cannot proxy API calls itself. Run the proxy in one of these places, then point
-      this page (or your real client) at it.</p>
+    <section id="chat" class="card chat-card">
+      <div class="section-title">
+        <div>
+          <h2>聊天 UI</h2>
+          <p>支持模型选择、多轮上下文、流式输出和清除聊天记录。聊天记录只保存在当前浏览器的 localStorage 中。</p>
+        </div>
+        <button id="clearChatBtn" class="button danger" type="button">清除聊天记录</button>
+      </div>
 
-      <h3>Run locally (recommended for personal use)</h3>
-      <pre><code>git clone https://github.com/&lt;you&gt;/transfer-api.git
-cd transfer-api
-# No npm install needed \u2014 the server has zero runtime dependencies.
-UNLIMITED_SURF_API_KEY=&lt;your unlimited.surf key&gt; \
-WORKER_API_KEY=&lt;optional client-facing key&gt; \
-node server.js</code></pre>
-      <p>Default URL: <code>http://localhost:6008</code></p>
-
-      <h3>Run with Docker</h3>
-      <pre><code>docker build -t transfer-api .
-docker run -p 6008:6008 \
-  -e UNLIMITED_SURF_API_KEY=&lt;your unlimited.surf key&gt; \
-  -e WORKER_API_KEY=&lt;optional client-facing key&gt; \
-  transfer-api</code></pre>
-
-      <h3>Other hosts</h3>
-      <ul>
-        <li><strong>Render / Railway / Fly.io / Koyeb</strong>: deploy from this repo, set <code>node server.js</code> as the start command, expose port <code>6008</code> (or read <code>$PORT</code>).</li>
-        <li><strong>Vercel / Netlify Functions</strong>: wrap <code>handleRequest</code> from <code>src/worker.js</code> in their fetch-style adapter.</li>
-        <li><strong>Cloudflare Workers</strong>: still supported via <code>npx wrangler deploy</code>, but no longer required.</li>
-      </ul>
-    </section>
-
-    <section class="card">
-      <h2>2. Generate client config</h2>
-      <p>Fill in your deployed base URL and the key your clients will send. The
-      snippets below update live.</p>
-
-      <div class="form-grid">
+      <div class="settings-grid">
         <label>
           <span>Base URL</span>
-          <input id="baseUrl" type="text" value="http://localhost:6008" />
+          <input id="baseUrl" type="text" value="http://localhost:6008" autocomplete="off" />
         </label>
         <label>
-          <span>Client API key</span>
-          <input id="apiKey" type="text" value="sk-your-worker-key" />
+          <span>客户端 API Key</span>
+          <input id="apiKey" type="password" placeholder="如果服务端未设置 WORKER_API_KEY，可留空或填任意值" autocomplete="off" />
         </label>
         <label>
-          <span>OpenAI model</span>
-          <input id="openaiModel" type="text" value="gateway-gpt-5-5" />
+          <span>接口类型</span>
+          <select id="apiType">
+            <option value="openai" selected>OpenAI /v1/chat/completions</option>
+            <option value="anthropic">Anthropic /v1/messages</option>
+          </select>
         </label>
         <label>
-          <span>Anthropic model</span>
-          <input id="claudeModel" type="text" value="claude-opus-4-7-20260101" />
+          <span>模型</span>
+          <div class="model-row">
+            <select id="modelSelect"></select>
+            <button id="refreshModelsBtn" class="button small" type="button">刷新</button>
+          </div>
         </label>
       </div>
 
-      <h3>OpenAI client (Python)</h3>
-      <pre><code id="snippetOpenAIPy"></code></pre>
-
-      <h3>curl \u2014 OpenAI chat.completions</h3>
-      <pre><code id="snippetCurlOpenAI"></code></pre>
-
-      <h3>curl \u2014 Anthropic messages</h3>
-      <pre><code id="snippetCurlAnthropic"></code></pre>
-
-      <h3>Claude Code / agents (PowerShell)</h3>
-      <pre><code id="snippetClaudeCode"></code></pre>
-    </section>
-
-    <section class="card">
-      <h2>3. Browser playground</h2>
-      <p>Send a quick chat-completions request to your running proxy. The browser
-      calls your <code>Base URL</code> directly, so the proxy must allow CORS \u2014
-      <code>server.js</code> already does. The response streams here as it arrives.</p>
-
-      <label class="block">
-        <span>Prompt</span>
-        <textarea id="promptInput" rows="4">Say hello in one short sentence.</textarea>
-      </label>
-      <div class="row">
-        <button id="sendBtn">Send</button>
+      <div class="advanced-row">
         <label class="inline">
-          <input type="checkbox" id="streamToggle" checked />
-          stream
+          <input id="streamToggle" type="checkbox" checked />
+          <span>流式输出</span>
         </label>
-        <label class="inline">
-          <input type="checkbox" id="anthropicToggle" />
-          use Anthropic /v1/messages
+        <label class="inline numeric">
+          <span>temperature</span>
+          <input id="temperatureInput" type="number" min="0" max="2" step="0.1" value="0.7" />
         </label>
+        <label class="inline numeric">
+          <span>max tokens</span>
+          <input id="maxTokensInput" type="number" min="1" step="1" value="1024" />
+        </label>
+        <span id="statusText" class="status">准备就绪</span>
       </div>
-      <pre><code id="playgroundOutput" class="output">(no response yet)</code></pre>
+
+      <div id="chatMessages" class="chat-messages" aria-live="polite"></div>
+
+      <form id="chatForm" class="composer">
+        <textarea id="messageInput" rows="3" placeholder="输入消息，Ctrl/⌘ + Enter 发送。例如：用三句话介绍这个项目。"></textarea>
+        <div class="composer-actions">
+          <span class="hint">Enter 换行，Ctrl/⌘ + Enter 发送</span>
+          <button id="sendBtn" class="button button-primary" type="submit">发送</button>
+        </div>
+      </form>
     </section>
 
-    <footer>
-      <p>
-        Source: <a id="repoLink" href="https://github.com/">project repository</a>.
-        MCP servers still run client-side; this proxy only exposes the model endpoints.
-      </p>
-    </footer>
+    <section id="docs" class="card">
+      <h2>使用文档</h2>
+      <div class="doc-grid">
+        <article>
+          <h3>本地启动</h3>
+          <p>需要 Node.js 18+。现在可以直接启动；如果没有配置 <code>UNLIMITED_SURF_API_KEY</code>，后台会先自动请求 <code>https://unlimited.surf/api/key</code> 获取 key，并且每小时自动刷新一次。</p>
+          <pre><code># Windows PowerShell
+# 可选：只限制浏览器/客户端调用本代理时使用的 key
+$env:WORKER_API_KEY = "&lt;可选：客户端 key&gt;"
+node server.js</code></pre>
+          <p>默认访问：<code>http://localhost:6008</code></p>
+        </article>
+        <article>
+          <h3>OpenAI 兼容调用</h3>
+          <pre><code>curl http://localhost:6008/v1/chat/completions \
+  -H "Authorization: Bearer &lt;你的客户端 key；未设置 WORKER_API_KEY 时可填任意值&gt;" \
+  -H "Content-Type: application/json" \
+  -d '{"model":"gateway-gpt-5-5","messages":[{"role":"user","content":"Hello"}],"stream":true}'</code></pre>
+        </article>
+        <article>
+          <h3>Anthropic / Claude Code</h3>
+          <pre><code>$env:ANTHROPIC_BASE_URL = "http://localhost:6008"
+$env:ANTHROPIC_AUTH_TOKEN = "&lt;你的客户端 key；未设置 WORKER_API_KEY 时可填任意值&gt;"
+$env:ANTHROPIC_API_KEY = "&lt;你的客户端 key；未设置 WORKER_API_KEY 时可填任意值&gt;"
+$env:ANTHROPIC_MODEL = "claude-opus-4-7-20260101"
+claude</code></pre>
+        </article>
+        <article>
+          <h3>常用端点</h3>
+          <ul>
+            <li><code>GET /health</code>：服务状态</li>
+            <li><code>GET /v1/models</code>：模型列表</li>
+            <li><code>POST /v1/chat/completions</code>：OpenAI 聊天</li>
+            <li><code>POST /v1/messages</code>：Anthropic 聊天</li>
+            <li><code>POST /v1/search</code>、<code>POST /v1/merge</code>：搜索与多模型合并能力</li>
+          </ul>
+        </article>
+      </div>
+    </section>
   </main>
 
   <script src="./app.js"></script>
