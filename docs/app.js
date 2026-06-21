@@ -1,14 +1,18 @@
 const $ = (id) => document.getElementById(id);
 
-const STORAGE_KEY = "transfer-api-chat-ui-v2";
+const STORAGE_KEY = "transfer-api-chat-ui-v3";
+const DEFAULT_CLIENT_KEY = "sk-no-key";
 const DEFAULT_MODELS = {
   openai: ["gateway-gpt-5-5", "gateway-gpt-5", "gpt-4o", "gpt-4o-mini"],
   anthropic: ["claude-opus-4-7-20260101", "claude-sonnet-4-5-20250929", "claude-3-5-sonnet-latest"],
 };
 
 const els = {
-  baseUrl: $("baseUrl"),
-  apiKey: $("apiKey"),
+  authOverlay: $("authOverlay"),
+  authForm: $("authForm"),
+  authKeyInput: $("authKeyInput"),
+  authSubmitBtn: $("authSubmitBtn"),
+  authError: $("authError"),
   apiType: $("apiType"),
   modelSelect: $("modelSelect"),
   refreshModelsBtn: $("refreshModelsBtn"),
@@ -26,13 +30,11 @@ const els = {
 let messages = [];
 let models = { openai: [...DEFAULT_MODELS.openai], anthropic: [...DEFAULT_MODELS.anthropic] };
 let sending = false;
-
-function stripTrailingSlash(value) {
-  return String(value || "").trim().replace(/\/+$/, "");
-}
+let uiAuthEnabled = false;
+let uiAuthenticated = true;
 
 function currentBaseUrl() {
-  return stripTrailingSlash(els.baseUrl.value) || window.location.origin;
+  return window.location.origin;
 }
 
 function currentApiType() {
@@ -43,20 +45,71 @@ function currentModel() {
   return els.modelSelect.value || models[currentApiType()][0];
 }
 
+function cookieValue(name) {
+  const prefix = `${name}=`;
+  for (const part of document.cookie.split(";")) {
+    const item = part.trim();
+    if (!item.startsWith(prefix)) continue;
+    try {
+      return decodeURIComponent(item.slice(prefix.length));
+    } catch (_) {
+      return item.slice(prefix.length);
+    }
+  }
+  return "";
+}
+
+function currentClientKey() {
+  return cookieValue("transfer_api_worker_key") || DEFAULT_CLIENT_KEY;
+}
+
 function authHeaders(apiType) {
-  const key = els.apiKey.value.trim();
+  const key = currentClientKey();
   if (apiType === "anthropic") {
     return {
-      "x-api-key": key || "sk-no-key",
+      "x-api-key": key,
       "anthropic-version": "2023-06-01",
     };
   }
-  return { Authorization: `Bearer ${key || "sk-no-key"}` };
+  return { Authorization: `Bearer ${key}` };
 }
 
 function setStatus(text, kind = "") {
   els.statusText.textContent = text;
   els.statusText.className = `status ${kind}`.trim();
+}
+
+function setUiLocked(locked) {
+  uiAuthenticated = !locked;
+  els.authOverlay.classList.toggle("hidden", !locked);
+  document.body.classList.toggle("ui-locked", locked);
+  els.sendBtn.disabled = locked || sending;
+  els.refreshModelsBtn.disabled = locked;
+  if (locked) setTimeout(() => els.authKeyInput.focus(), 0);
+}
+
+async function checkUiAuth() {
+  try {
+    const response = await fetch(`${currentBaseUrl()}/ui-auth/status`, { cache: "no-store" });
+    const data = await response.json();
+    uiAuthEnabled = Boolean(data.enabled);
+    setUiLocked(uiAuthEnabled && !data.authenticated);
+  } catch (_) {
+    // If the auth-status helper is unavailable, keep the UI usable for static hosting.
+    uiAuthEnabled = false;
+    setUiLocked(false);
+  }
+}
+
+async function verifyUiKey(key) {
+  const response = await fetch(`${currentBaseUrl()}/ui-auth/verify`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ key }),
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok || !data.ok) throw new Error("Key 不正确，请重新输入。");
+  return data;
 }
 
 function escapeHtml(value) {
@@ -73,8 +126,6 @@ function loadState() {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return;
     const state = JSON.parse(raw);
-    if (state.baseUrl) els.baseUrl.value = state.baseUrl;
-    if (state.apiKey) els.apiKey.value = state.apiKey;
     if (state.apiType) els.apiType.value = state.apiType;
     if (typeof state.stream === "boolean") els.streamToggle.checked = state.stream;
     if (state.temperature) els.temperatureInput.value = state.temperature;
@@ -97,8 +148,6 @@ function saveState() {
     const selectedModels = JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}").selectedModels || {};
     selectedModels[currentApiType()] = currentModel();
     localStorage.setItem(STORAGE_KEY, JSON.stringify({
-      baseUrl: currentBaseUrl(),
-      apiKey: els.apiKey.value.trim(),
       apiType: currentApiType(),
       stream: els.streamToggle.checked,
       temperature: els.temperatureInput.value,
@@ -173,9 +222,7 @@ function buildRequestBody(apiType, promptMessages) {
     stream: els.streamToggle.checked,
     temperature: Number.isFinite(temperature) ? temperature : 0.7,
   };
-  if (apiType === "anthropic") {
-    return { ...common, max_tokens: maxTokens };
-  }
+  if (apiType === "anthropic") return { ...common, max_tokens: maxTokens };
   return { ...common, max_tokens: maxTokens };
 }
 
@@ -196,6 +243,12 @@ async function sendChat(prompt) {
     },
     body: JSON.stringify(buildRequestBody(apiType, conversation)),
   });
+
+  if (response.status === 401 && uiAuthEnabled) {
+    document.cookie = "transfer_api_worker_key=; Path=/; Max-Age=0; SameSite=Lax";
+    setUiLocked(true);
+    throw new Error("鉴权已失效，请重新输入 WORKER_API_KEY。");
+  }
 
   if (!response.ok) {
     const text = await response.text();
@@ -267,6 +320,8 @@ function extractFinalText(obj, apiType) {
 }
 
 async function refreshModels() {
+  if (!uiAuthenticated) return;
+
   const apiType = currentApiType();
   const base = currentBaseUrl();
   setStatus("正在刷新模型...", "loading");
@@ -277,6 +332,11 @@ async function refreshModels() {
       ? { ...authHeaders(apiType), "anthropic-version": "2023-06-01" }
       : authHeaders(apiType);
     const response = await fetch(`${base}/v1/models`, { headers });
+    if (response.status === 401 && uiAuthEnabled) {
+      document.cookie = "transfer_api_worker_key=; Path=/; Max-Age=0; SameSite=Lax";
+      setUiLocked(true);
+      throw new Error("鉴权已失效，请重新输入 WORKER_API_KEY。");
+    }
     if (!response.ok) throw new Error(`HTTP ${response.status}: ${await response.text()}`);
     const data = await response.json();
     const ids = extractModelIds(data);
@@ -289,7 +349,7 @@ async function refreshModels() {
     renderModelOptions();
     setStatus(`模型刷新失败，使用内置列表：${error.message}`, "error");
   } finally {
-    els.refreshModelsBtn.disabled = false;
+    els.refreshModelsBtn.disabled = !uiAuthenticated;
   }
 }
 
@@ -301,9 +361,33 @@ function extractModelIds(data) {
   }).filter(Boolean))];
 }
 
+els.authForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const key = els.authKeyInput.value.trim();
+  if (!key) {
+    els.authError.textContent = "请输入 WORKER_API_KEY。";
+    return;
+  }
+
+  els.authSubmitBtn.disabled = true;
+  els.authError.textContent = "正在验证...";
+
+  try {
+    await verifyUiKey(key);
+    els.authKeyInput.value = "";
+    els.authError.textContent = "";
+    setUiLocked(false);
+    setStatus("鉴权成功", "ok");
+  } catch (error) {
+    els.authError.textContent = error.message;
+  } finally {
+    els.authSubmitBtn.disabled = false;
+  }
+});
+
 els.chatForm.addEventListener("submit", async (event) => {
   event.preventDefault();
-  if (sending) return;
+  if (sending || !uiAuthenticated) return;
 
   const prompt = els.messageInput.value.trim();
   if (!prompt) return;
@@ -321,8 +405,8 @@ els.chatForm.addEventListener("submit", async (event) => {
     setStatus("请求失败", "error");
   } finally {
     sending = false;
-    els.sendBtn.disabled = false;
-    els.messageInput.focus();
+    els.sendBtn.disabled = !uiAuthenticated;
+    if (uiAuthenticated) els.messageInput.focus();
   }
 });
 
@@ -342,7 +426,7 @@ els.clearChatBtn.addEventListener("click", () => {
 
 els.refreshModelsBtn.addEventListener("click", refreshModels);
 els.apiType.addEventListener("change", () => { renderModelOptions(); saveState(); });
-[els.baseUrl, els.apiKey, els.modelSelect, els.streamToggle, els.temperatureInput, els.maxTokensInput].forEach((el) => {
+[els.modelSelect, els.streamToggle, els.temperatureInput, els.maxTokensInput].forEach((el) => {
   el.addEventListener("input", saveState);
   el.addEventListener("change", saveState);
 });
@@ -351,3 +435,4 @@ loadState();
 renderModelOptions();
 renderMessages();
 saveState();
+checkUiAuth();

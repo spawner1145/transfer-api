@@ -7,6 +7,17 @@
   <link rel="stylesheet" href="./style.css" />
 </head>
 <body>
+  <div id="authOverlay" class="auth-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="authTitle">
+    <form id="authForm" class="auth-dialog">
+      <p class="eyebrow">需要鉴权</p>
+      <h2 id="authTitle">输入 WORKER_API_KEY</h2>
+      <p>服务端启用了 <code>WORKER_API_KEY</code>。请输入正确的客户端 Key 后才能使用网页 UI；验证成功后会保存到本地 Cookie。</p>
+      <input id="authKeyInput" type="password" placeholder="请输入 WORKER_API_KEY" autocomplete="current-password" />
+      <button id="authSubmitBtn" class="button button-primary" type="submit">验证并进入</button>
+      <p id="authError" class="auth-error"></p>
+    </form>
+  </div>
+
   <header class="hero">
     <div class="hero-inner">
       <p class="eyebrow">localhost:6008</p>
@@ -31,14 +42,6 @@
       </div>
 
       <div class="settings-grid">
-        <label>
-          <span>Base URL</span>
-          <input id="baseUrl" type="text" value="http://localhost:6008" autocomplete="off" />
-        </label>
-        <label>
-          <span>客户端 API Key</span>
-          <input id="apiKey" type="password" placeholder="如果服务端未设置 WORKER_API_KEY，可留空或填任意值" autocomplete="off" />
-        </label>
         <label>
           <span>接口类型</span>
           <select id="apiType">
@@ -87,12 +90,12 @@
       <div class="doc-grid">
         <article>
           <h3>本地启动</h3>
-          <p>需要 Node.js 18+。现在可以直接启动；如果没有配置 <code>UNLIMITED_SURF_API_KEY</code>，后台会先自动请求 <code>https://unlimited.surf/api/key</code> 获取 key，并且每小时自动刷新一次。</p>
+          <p>需要 Node.js 18+。现在可以直接启动；如果没有配置 <code>UNLIMITED_SURF_API_KEY</code>，后台会先自动请求 <code>https://unlimited.surf/api/key</code> 获取 key，并且每小时自动刷新一次。网页端会自动使用当前站点地址，不需要手动填写 Base URL。</p>
           <pre><code># Windows PowerShell
 # 可选：只限制浏览器/客户端调用本代理时使用的 key
 $env:WORKER_API_KEY = "&lt;可选：客户端 key&gt;"
 node server.js</code></pre>
-          <p>默认访问：<code>http://localhost:6008</code></p>
+          <p>默认访问：<code>http://localhost:6008</code>。如果设置了 <code>WORKER_API_KEY</code>，进入网页 UI 前会弹窗要求输入，验证成功后保存在本地 Cookie。</p>
         </article>
         <article>
           <h3>OpenAI 兼容调用</h3>

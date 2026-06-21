@@ -34,6 +34,7 @@ const STATIC_TYPES = new Map([
   [".svg", "image/svg+xml"],
   [".ico", "image/x-icon"],
 ]);
+const UI_AUTH_COOKIE = "transfer_api_worker_key";
 
 // Verify the runtime exposes the Web fetch primitives we rely on.
 for (const name of ["fetch", "Request", "Response", "ReadableStream"]) {
@@ -116,6 +117,81 @@ function startKeyRefreshTimer() {
   console.log(`[key refresh] periodic refresh every ${Math.round(KEY_REFRESH_INTERVAL_MS / 1000)} seconds.`);
 }
 
+function parseCookies(headerValue) {
+  const cookies = new Map();
+  for (const part of String(headerValue || "").split(";")) {
+    const index = part.indexOf("=");
+    if (index === -1) continue;
+    const name = part.slice(0, index).trim();
+    const value = part.slice(index + 1).trim();
+    if (!name) continue;
+    try {
+      cookies.set(name, decodeURIComponent(value));
+    } catch (_) {
+      cookies.set(name, value);
+    }
+  }
+  return cookies;
+}
+
+function clientKeyFromCookie(req) {
+  return parseCookies(req.headers.cookie).get(UI_AUTH_COOKIE) || "";
+}
+
+function isUiAuthenticated(req) {
+  if (!process.env.WORKER_API_KEY) return true;
+  return clientKeyFromCookie(req) === process.env.WORKER_API_KEY;
+}
+
+async function readNodeJson(req) {
+  const chunks = [];
+  for await (const chunk of req) chunks.push(chunk);
+  const text = Buffer.concat(chunks).toString("utf8");
+  if (!text.trim()) return {};
+  return JSON.parse(text);
+}
+
+async function tryServeUiAuth(req, res) {
+  const url = new URL(buildRequestUrl(req));
+  if (!url.pathname.startsWith("/ui-auth/")) return false;
+
+  res.setHeader("content-type", "application/json; charset=utf-8");
+  res.setHeader("cache-control", "no-store");
+
+  if (url.pathname === "/ui-auth/status" && req.method === "GET") {
+    res.statusCode = 200;
+    res.end(JSON.stringify({
+      enabled: Boolean(process.env.WORKER_API_KEY),
+      authenticated: isUiAuthenticated(req),
+    }));
+    return true;
+  }
+
+  if (url.pathname === "/ui-auth/verify" && req.method === "POST") {
+    try {
+      const body = await readNodeJson(req);
+      const key = typeof body.key === "string" ? body.key : "";
+      const ok = !process.env.WORKER_API_KEY || key === process.env.WORKER_API_KEY;
+      res.statusCode = ok ? 200 : 401;
+      if (ok && process.env.WORKER_API_KEY) {
+        res.setHeader(
+          "set-cookie",
+          `${UI_AUTH_COOKIE}=${encodeURIComponent(key)}; Path=/; SameSite=Lax; Max-Age=2592000`,
+        );
+      }
+      res.end(JSON.stringify({ ok, enabled: Boolean(process.env.WORKER_API_KEY) }));
+    } catch (err) {
+      res.statusCode = 400;
+      res.end(JSON.stringify({ ok: false, error: err && err.message ? err.message : String(err) }));
+    }
+    return true;
+  }
+
+  res.statusCode = 404;
+  res.end(JSON.stringify({ ok: false, error: "not_found" }));
+  return true;
+}
+
 function nodeRequestToFetchRequest(req) {
   const url = buildRequestUrl(req);
   const headers = new Headers();
@@ -196,6 +272,7 @@ async function writeFetchResponseToNode(fetchResponse, res) {
 
 const server = http.createServer(async (req, res) => {
   try {
+    if (await tryServeUiAuth(req, res)) return;
     if (await tryServeDocs(req, res)) return;
 
     const fetchRequest = nodeRequestToFetchRequest(req);
